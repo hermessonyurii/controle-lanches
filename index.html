@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle do Shawarma 🌯</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; font-family: 'Poppins', sans-serif; margin: 0; padding: 0; }
+        body { background: #f4f6f8; color: #333; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        header { background: linear-gradient(135deg, #FF6B00, #FF9500); color: white; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px; }
+        .dash { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .card { flex: 1; min-width: 150px; background: white; padding: 15px; border-radius: 10px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .card h4 { font-size: 0.85rem; color: #666; }
+        .card p { font-size: 1.4rem; font-weight: bold; }
+        .green { color: #10B981; } .red { color: #EF4444; } .blue { color: #3B82F6; }
+        .admin-bar { background: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        button { cursor: pointer; padding: 8px 15px; border: none; border-radius: 6px; font-weight: bold; transition: 0.2s; }
+        .btn-admin { background: #3B82F6; color: white; }
+        .btn-add { background: #10B981; color: white; }
+        .btn-del { background: #EF4444; color: white; padding: 4px 8px; font-size: 0.8rem; }
+        .table-wrapper { overflow-x: auto; }
+        table { width: 100%; min-width: 600px; background: white; border-collapse: collapse; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f9fafb; font-size: 0.85rem; color: #666; }
+        select, input { padding: 6px; border-radius: 6px; border: 1px solid #ccc; width: 100%; }
+        .hidden { display: none !important; }
+        .form-add { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+        .form-add input, .form-add select { flex: 1; min-width: 120px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>🌯 Controle do Shawarma</h1>
+        <p>Acompanhamento em tempo real</p>
+    </header>
+
+    <div class="dash">
+        <div class="card"><h4>Custo Total</h4><p class="blue" id="total-geral">R$ 0,00</p></div>
+        <div class="card"><h4>Arrecadado</h4><p class="green" id="total-pago">R$ 0,00</p></div>
+        <div class="card"><h4>Pendente</h4><p class="red" id="total-pendente">R$ 0,00</p></div>
+    </div>
+
+    <div class="admin-bar">
+        <span id="admin-status">👁️ Modo Visualização (Apenas Leitura)</span>
+        <button class="btn-admin" id="btn-login" onclick="toggleAdmin()">Entrar como Dono</button>
+    </div>
+
+    <div id="admin-controls" class="admin-bar hidden" style="flex-direction: column; align-items: stretch;">
+        <h3>Adicionar Novo Pagador</h3>
+        <div class="form-add">
+            <input type="text" id="novo-nome" placeholder="Nome">
+            <input type="text" id="nova-dupla" placeholder="Dividindo com">
+            <select id="nova-porcao">
+                <option value="Metade">Metade</option>
+                <option value="Inteiro">Inteiro</option>
+            </select>
+            <input type="number" id="novo-valor" placeholder="Valor (ex: 12.50)" step="0.5">
+            <button class="btn-add" onclick="adicionarPessoa()">+ Adicionar</button>
+        </div>
+    </div>
+
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Dupla</th>
+                    <th>Porção</th>
+                    <th>Valor</th>
+                    <th>Status</th>
+                    <th>Forma</th>
+                    <th class="col-action hidden">Ação</th>
+                </tr>
+            </thead>
+            <tbody id="tabela-body">
+                <!-- Dados do Firebase serão inseridos aqui -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // Suas chaves exatas do Firebase
+    const firebaseConfig = {
+        apiKey: "AIzaSyBmqBYfyXCzP6SLMjoTPO3tJSW7mMTiuPk",
+        authDomain: "lanches-control.firebaseapp.com",
+        projectId: "lanches-control",
+        storageBucket: "lanches-control.firebasestorage.app",
+        messagingSenderId: "913005629102",
+        appId: "1:913005629102:web:9a70c4e256f14e27a7273f"
+    };
+
+    const SENHA_ADMIN = "10203040Hy@@"; // Sua senha para editar a planilha
+    let isAdmin = false;
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const colRef = collection(db, "shawarma");
+
+    onSnapshot(colRef, (snapshot) => {
+        const tbody = document.getElementById('tabela-body');
+        tbody.innerHTML = '';
+        
+        let tGeral = 0, tPago = 0, tPendente = 0;
+
+        snapshot.docs.forEach(docSnap => {
+            const data = docSnap.data();
+            const id = docSnap.id;
+            const valor = parseFloat(data.valor) || 0;
+            
+            tGeral += valor;
+            if (data.status === 'Pago') tPago += valor;
+            else tPendente += valor;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${data.nome}</strong></td>
+                <td>${data.dupla}</td>
+                <td>${data.porcao}</td>
+                <td>R$ ${valor.toFixed(2)}</td>
+                <td>
+                    <select ${!isAdmin ? 'disabled' : ''} onchange="atualizarCampo('${id}', 'status', this.value)">
+                        <option value="Pendente" ${data.status === 'Pendente' ? 'selected' : ''}>🔴 Pendente</option>
+                        <option value="Pago" ${data.status === 'Pago' ? 'selected' : ''}>✅ Pago</option>
+                    </select>
+                </td>
+                <td>
+                    <select ${!isAdmin ? 'disabled' : ''} onchange="atualizarCampo('${id}', 'forma', this.value)">
+                        <option value="-" ${data.forma === '-' ? 'selected' : ''}>-</option>
+                        <option value="PIX" ${data.forma === 'PIX' ? 'selected' : ''}>PIX</option>
+                        <option value="Dinheiro" ${data.forma === 'Dinheiro' ? 'selected' : ''}>Dinheiro</option>
+                        <option value="Cartão" ${data.forma === 'Cartão' ? 'selected' : ''}>Cartão</option>
+                    </select>
+                </td>
+                <td class="col-action ${!isAdmin ? 'hidden' : ''}">
+                    <button class="btn-del" onclick="removerPessoa('${id}')">🗑️</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('total-geral').innerText = `R$ ${tGeral.toFixed(2)}`;
+        document.getElementById('total-pago').innerText = `R$ ${tPago.toFixed(2)}`;
+        document.getElementById('total-pendente').innerText = `R$ ${tPendente.toFixed(2)}`;
+    });
+
+    window.toggleAdmin = () => {
+        if (!isAdmin) {
+            const senha = prompt("Digite a senha de administrador:");
+            if (senha === SENHA_ADMIN) {
+                isAdmin = true;
+                document.getElementById('admin-status').innerText = "✏️ Modo Administrador Ativo";
+                document.getElementById('btn-login').innerText = "Sair";
+                document.getElementById('admin-controls').classList.remove('hidden');
+                document.querySelectorAll('.col-action').forEach(el => el.classList.remove('hidden'));
+                const selects = document.querySelectorAll('select');
+                selects.forEach(s => s.removeAttribute('disabled'));
+            } else {
+                alert("Senha incorreta!");
+            }
+        } else {
+            isAdmin = false;
+            location.reload();
+        }
+    };
+
+    window.atualizarCampo = async (id, campo, valor) => {
+        await updateDoc(doc(db, "shawarma", id), { [campo]: valor });
+    };
+
+    window.adicionarPessoa = async () => {
+        const nome = document.getElementById('novo-nome').value;
+        const dupla = document.getElementById('nova-dupla').value || "-";
+        const porcao = document.getElementById('nova-porcao').value;
+        const valor = parseFloat(document.getElementById('novo-valor').value) || 0;
+
+        if (!nome) return alert("Digite ao menos o nome!");
+
+        await addDoc(colRef, { nome, dupla, porcao, valor, status: "Pendente", forma: "-" });
+        
+        document.getElementById('novo-nome').value = '';
+        document.getElementById('nova-dupla').value = '';
+        document.getElementById('novo-valor').value = '';
+    };
+
+    window.removerPessoa = async (id) => {
+        if (confirm("Deseja remover esta pessoa da lista?")) {
+            await deleteDoc(doc(db, "shawarma", id));
+        }
+    };
+</script>
+</body>
+</html>
