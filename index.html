@@ -77,7 +77,6 @@
                 </tr>
             </thead>
             <tbody id="tabela-body">
-                <!-- Dados do Firebase serão inseridos aqui -->
             </tbody>
         </table>
     </div>
@@ -87,7 +86,6 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // Suas chaves exatas do Firebase
     const firebaseConfig = {
         apiKey: "AIzaSyBmqBYfyXCzP6SLMjoTPO3tJSW7mMTiuPk",
         authDomain: "lanches-control.firebaseapp.com",
@@ -97,7 +95,7 @@
         appId: "1:913005629102:web:9a70c4e256f14e27a7273f"
     };
 
-    const SENHA_ADMIN = "10203040Hy@@"; // Sua senha para editar a planilha
+    const SENHA_ADMIN = "10203040Hy@@"; 
     let isAdmin = false;
 
     const app = initializeApp(firebaseConfig);
@@ -110,9 +108,19 @@
         
         let tGeral = 0, tPago = 0, tPendente = 0;
 
+        const docs = [];
         snapshot.docs.forEach(docSnap => {
-            const data = docSnap.data();
-            const id = docSnap.id;
+            docs.push({ id: docSnap.id, ...docSnap.data() });
+        });
+
+        docs.sort((a, b) => {
+            const nomeA = (a.nome || "").toLowerCase();
+            const nomeB = (b.nome || "").toLowerCase();
+            return nomeA.localeCompare(nomeB);
+        });
+
+        docs.forEach(data => {
+            const id = data.id;
             const valor = parseFloat(data.valor) || 0;
             
             tGeral += valor;
